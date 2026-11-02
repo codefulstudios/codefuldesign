@@ -1,0 +1,2 @@
+async function refreshBrand(){const logo=document.querySelector('.site-brand-logo');const defaultLogo=window.DEFAULT_CODEFUL_LOGO||'';try{const r=await fetch('/api/branding',{cache:'no-store'});const d=await r.json();if(logo)logo.src=d.logo||defaultLogo}catch{if(logo)logo.src=defaultLogo}}
+refreshBrand();
