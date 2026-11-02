@@ -1,0 +1,22 @@
+// Commerce administration foundation. No payment, fulfilment, or licence activation happens here.
+export async function installCommerceAdmin(app,pool){
+const ddl=[
+"CREATE TABLE IF NOT EXISTS studio_customers (id BIGSERIAL PRIMARY KEY,name VARCHAR(120) NOT NULL,email VARCHAR(254) NOT NULL UNIQUE,created_at TIMESTAMPTZ NOT NULL DEFAULT now())",
+"CREATE TABLE IF NOT EXISTS studio_orders (id BIGSERIAL PRIMARY KEY,customer_id BIGINT REFERENCES studio_customers(id) ON DELETE RESTRICT,reference VARCHAR(80) NOT NULL UNIQUE,description TEXT NOT NULL,total_pence BIGINT NOT NULL DEFAULT 0 CHECK(total_pence>=0),currency VARCHAR(3) NOT NULL DEFAULT 'GBP',status VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','pending','cancelled')),created_at TIMESTAMPTZ NOT NULL DEFAULT now())",
+"CREATE TABLE IF NOT EXISTS studio_licences (id BIGSERIAL PRIMARY KEY,customer_id BIGINT REFERENCES studio_customers(id) ON DELETE RESTRICT,product_name VARCHAR(120) NOT NULL,reference VARCHAR(120) NOT NULL UNIQUE,status VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','revoked')),created_at TIMESTAMPTZ NOT NULL DEFAULT now())",
+"CREATE TABLE IF NOT EXISTS studio_downloads (id BIGSERIAL PRIMARY KEY,title VARCHAR(120) NOT NULL,product_name VARCHAR(120) NOT NULL,version VARCHAR(50) NOT NULL,notes TEXT NOT NULL DEFAULT '',status VARCHAR(30) NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','archived')),created_at TIMESTAMPTZ NOT NULL DEFAULT now())",
+"CREATE TABLE IF NOT EXISTS studio_settings (key VARCHAR(80) PRIMARY KEY,value TEXT NOT NULL)"
+];for(const sql of ddl)await pool.query(sql);
+const specs={
+customers:{table:'studio_customers',fields:['name','email'],required:['name','email'],max:254},
+orders:{table:'studio_orders',fields:['customer_id','reference','description','total_pence','currency','status'],required:['reference','description'],statuses:['draft','pending','cancelled']},
+licences:{table:'studio_licences',fields:['customer_id','product_name','reference','status'],required:['product_name','reference'],statuses:['draft','revoked']},
+downloads:{table:'studio_downloads',fields:['title','product_name','version','notes','status'],required:['title','product_name','version'],statuses:['draft','archived']}
+};
+for(const [name,spec] of Object.entries(specs)){
+app.get('/api/admin/'+name,async(_req,res)=>{try{res.json((await pool.query('SELECT * FROM '+spec.table+' ORDER BY id DESC LIMIT 200')).rows)}catch{res.status(503).json({error:'Database unavailable'})}});
+app.post('/api/admin/'+name,async(req,res)=>{const v=req.body||{};if(!spec.required.every(k=>typeof v[k]==='string'&&v[k].trim()&&v[k].length<=254))return res.status(400).json({error:'Required fields missing'});if(spec.statuses&&!spec.statuses.includes(v.status||'draft'))return res.status(400).json({error:'Invalid status'});if(name==='customers'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email))return res.status(400).json({error:'Invalid email'});if(name==='orders'&&(!Number.isSafeInteger(Number(v.total_pence||0))||Number(v.total_pence||0)<0||!/^[A-Z]{3}$/.test(v.currency||'GBP')))return res.status(400).json({error:'Invalid amount or currency'});const values=spec.fields.map(k=>{const value=v[k];if(k==='customer_id')return value?Number(value):null;if(k==='total_pence')return Number(value||0);if(k==='status')return value||'draft';if(k==='currency')return value||'GBP';return String(value||'').slice(0,k==='notes'||k==='description'?2000:254)});try{const placeholders=values.map((_,i)=>'$'+(i+1)).join(',');const q='INSERT INTO '+spec.table+'('+spec.fields.join(',')+') VALUES('+placeholders+') RETURNING *';res.status(201).json((await pool.query(q,values)).rows[0])}catch{res.status(400).json({error:'Unable to save; check unique references and customer ID'})}});
+}
+app.get('/api/admin/settings',async(_req,res)=>{res.json(Object.fromEntries((await pool.query('SELECT key,value FROM studio_settings')).rows.map(x=>[x.key,x.value])))});
+app.put('/api/admin/settings',async(req,res)=>{const allowed=['site_title','site_tagline','contact_email','announcement'];for(const [k,v]of Object.entries(req.body||{})){if(!allowed.includes(k)||typeof v!=='string'||v.length>500)return res.status(400).json({error:'Invalid site setting'})}try{for(const [k,v]of Object.entries(req.body||{}))await pool.query('INSERT INTO studio_settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[k,v]);res.json({ok:true})}catch{res.status(503).json({error:'Could not save settings'})}});
+}
