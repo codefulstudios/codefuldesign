@@ -7,6 +7,7 @@ import {installProductPages} from './product-pages.js';
 import {installModuleShop} from './module-shop.js';
 import {installProductMedia} from './product-media.js';
 import {installDesignAndAnalytics} from './design-analytics.js';
+import {installOrderManagement} from './order-management.js';
 const app=express();app.disable('x-powered-by');app.post('/api/stripe/webhook',express.raw({type:'application/json',limit:'1mb'}),(req,res,next)=>next());app.use(express.json({limit:'1mb'}));app.use(express.static('public'));
 const products=[{slug:'bazunk',name:'Bazunk',type:'Multi-vendor marketplace',desc:'A modern marketplace with listings, offers, auctions and rewards.',tags:['Marketplace','Commerce'],status:'In development'},{slug:'nexvenue',name:'NexVenue',type:'Events & memberships',desc:'An integrated platform for events, ticketing and memberships.',tags:['Events','Ticketing'],status:'In development'},{slug:'marketnexa',name:'MarketNexa',type:'Modular marketplace software',desc:'Self-hosted marketplace software built to be extended with premium modules.',tags:['Laravel','Modular'],status:'In development'}];
 const modules=[{name:'Advanced Auctions Pro',product:'MarketNexa',desc:'Bidding and reserve prices'},{name:'B2B Wholesale',product:'MarketNexa',desc:'Wholesale ordering and pricing'},{name:'Seller Growth Pro',product:'MarketNexa',desc:'Campaigns and promotions'},{name:'Helpdesk',product:'MarketNexa',desc:'Support tickets and conversations'},{name:'Analytics',product:'Coming soon',desc:'Reporting and insights'},{name:'Licensing',product:'Coming soon',desc:'Licence validation'}];
@@ -16,7 +17,7 @@ if(pool){try{await pool.query('CREATE TABLE IF NOT EXISTS enquiries (id BIGSERIA
 await installAdmin(app,pool);
 if(pool)installBranding(app,pool);
 await installStore(app,pool);
-if(pool){await installProductPages(app,pool);await installModuleShop(app,pool);await installProductMedia(app,pool);installDesignAndAnalytics(app,pool)}
+if(pool){await installProductPages(app,pool);await installModuleShop(app,pool);await installProductMedia(app,pool);installDesignAndAnalytics(app,pool);await installOrderManagement(app,pool)}
 if(pool)stripeWebhook(app,pool);
 app.get('/api/products',async(_q,r)=>{try{r.json((await pool.query("SELECT slug,name,type,description,tags,status FROM studio_products WHERE status!='Archived' ORDER BY id")).rows)}catch{r.status(503).json({error:'Catalogue unavailable'})}});app.get('/api/modules',async(_q,r)=>{try{r.json((await pool.query('SELECT name,product,description FROM studio_modules ORDER BY id')).rows)}catch{r.status(503).json({error:'Modules unavailable'})}});
 app.get('/modules',(req,res)=>res.sendFile('modules.html',{root:'public'}));
