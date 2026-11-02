@@ -1,0 +1,8 @@
+import {escape as unused} from 'node:querystring';
+export function installSEO(app,pool){
+const base=(process.env.PUBLIC_BASE_URL||'https://codefuldesign.onrender.com').replace(/\/$/,'');
+const xml=s=>String(s).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]));
+app.get('/sitemap.xml',async(_q,res)=>{try{const [products,modules,docs,legal]=await Promise.all([pool.query("SELECT slug FROM studio_products WHERE status!='Archived'"),pool.query("SELECT slug FROM studio_modules WHERE status!='Archived' AND slug IS NOT NULL"),pool.query('SELECT slug FROM studio_docs WHERE public=true'),pool.query('SELECT slug FROM studio_legal_pages WHERE published=true')]);const paths=['/','/modules','/bundles','/docs',...products.rows.map(x=>'/products/'+x.slug),...modules.rows.map(x=>'/modules/'+x.slug),...legal.rows.map(x=>'/legal/'+x.slug)];res.type('application/xml').send('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+paths.map(p=>'<url><loc>'+xml(base+p)+'</loc></url>').join('')+'</urlset>')}catch{res.sendStatus(503)}});
+app.get('/robots.txt',(_q,res)=>res.type('text/plain').send('User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /account\nDisallow: /api/\nSitemap: '+base+'/sitemap.xml\n'));
+app.get('/api/seo/product/:slug',async(req,res)=>{try{const r=await pool.query("SELECT slug,name,description,status FROM studio_products WHERE slug=$1 AND status!='Archived'",[req.params.slug]);if(!r.rowCount)return res.sendStatus(404);res.json({title:r.rows[0].name+' — Codeful Studios',description:r.rows[0].description.slice(0,155),canonical:base+'/products/'+r.rows[0].slug,type:'SoftwareApplication'})}catch{res.sendStatus(503)}});
+}
