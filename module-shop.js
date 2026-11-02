@@ -1,0 +1,15 @@
+export async function installModuleShop(app,pool){
+await pool.query("ALTER TABLE studio_modules ADD COLUMN IF NOT EXISTS slug TEXT");
+await pool.query("ALTER TABLE studio_modules ADD COLUMN IF NOT EXISTS parent_slug TEXT");
+await pool.query("ALTER TABLE studio_modules ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Coming soon'");
+await pool.query("ALTER TABLE studio_modules ADD COLUMN IF NOT EXISTS amount_pence INTEGER");
+await pool.query("ALTER TABLE studio_modules ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'gbp'");
+await pool.query("ALTER TABLE studio_modules ADD COLUMN IF NOT EXISTS features JSONB NOT NULL DEFAULT '[]'::jsonb");
+await pool.query("ALTER TABLE studio_modules ADD COLUMN IF NOT EXISTS compatibility TEXT NOT NULL DEFAULT ''");
+await pool.query("UPDATE studio_modules SET slug=lower(regexp_replace(regexp_replace(name,'[^a-zA-Z0-9]+','-','g'),'^-|-$','','g')) WHERE slug IS NULL");
+await pool.query("UPDATE studio_modules m SET parent_slug=p.slug FROM studio_products p WHERE lower(m.product)=lower(p.name) AND m.parent_slug IS NULL");
+await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS studio_modules_slug_unique ON studio_modules(slug)");
+app.get('/api/module-shop',async(_q,res)=>{try{res.json((await pool.query("SELECT m.id,m.slug,m.name,m.description,m.parent_slug,m.status,m.amount_pence,m.currency,m.compatibility,m.features,p.name AS parent_name FROM studio_modules m LEFT JOIN studio_products p ON p.slug=m.parent_slug WHERE m.status<>'Archived' ORDER BY m.id")).rows)}catch{res.status(503).json({error:'Modules unavailable'})}});
+app.get('/api/module-shop/:slug',async(req,res)=>{try{const q=await pool.query("SELECT m.*,p.name AS parent_name FROM studio_modules m LEFT JOIN studio_products p ON p.slug=m.parent_slug WHERE m.slug=$1 AND m.status<>'Archived'",[req.params.slug]);if(!q.rowCount)return res.status(404).json({error:'Module not found'});res.json(q.rows[0])}catch{res.status(503).json({error:'Module unavailable'})}});
+app.put('/api/admin/module-shop/:id',async(req,res)=>{const b=req.body||{};if(!/^\d+$/.test(req.params.id)||!/^[-a-z0-9]{2,100}$/.test(b.slug||'')||!(b.parent_slug===''||/^[-a-z0-9]{2,100}$/.test(b.parent_slug||''))||!['Coming soon','Available','In development','Archived'].includes(b.status)||!Number.isInteger(b.amount_pence)||b.amount_pence<0||b.amount_pence>100000000||!['gbp','eur','usd'].includes(b.currency)||typeof b.compatibility!=='string'||b.compatibility.length>1000||!Array.isArray(b.features)||b.features.length>20||!b.features.every(x=>typeof x==='string'&&x.length<250))return res.status(400).json({error:'Invalid module settings'});try{const q=await pool.query('UPDATE studio_modules SET slug=$1,parent_slug=$2,status=$3,amount_pence=$4,currency=$5,compatibility=$6,features=$7::jsonb WHERE id=$8 RETURNING id',[b.slug,b.parent_slug||null,b.status,b.amount_pence,b.currency,b.compatibility,JSON.stringify(b.features),req.params.id]);if(!q.rowCount)return res.status(404).json({error:'Module not found'});res.json({ok:true})}catch{res.status(400).json({error:'Save failed. Check parent product and slug uniqueness'})}});
+}
