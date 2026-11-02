@@ -9,7 +9,7 @@ for(const p of seedProducts)await pool.query('INSERT INTO studio_products(slug,n
 if((await pool.query('SELECT COUNT(*)::int AS n FROM studio_modules')).rows[0].n===0){for(const m of [['Advanced Auctions Pro','MarketNexa','Advanced bidding'],['B2B Wholesale','MarketNexa','Wholesale ordering'],['Seller Growth Pro','MarketNexa','Seller campaigns'],['Helpdesk','MarketNexa','Support tickets']])await pool.query('INSERT INTO studio_modules(name,product,description) VALUES($1,$2,$3)',m)}
 const secret=process.env.ADMIN_SESSION_SECRET||'',email=process.env.ADMIN_EMAIL||'',hash=process.env.ADMIN_PASSWORD_HASH||'';
 await pool.query('CREATE TABLE IF NOT EXISTS studio_admin_sessions (token_hash TEXT PRIMARY KEY,expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ DEFAULT now())');
-const credentialReady=()=>secret.length>=32&&/^\\S+@\\S+\\.\\S+$/.test(email)&&/^[a-f0-9]{64}:[a-f0-9]{128}$/i.test(hash);
+const credentialReady=()=>secret.length>=32&&/^\S+@\S+\.\S+$/.test(email)&&/^[a-f0-9]{64}:[a-f0-9]{128}$/i.test(hash);
 const sign=x=>crypto.createHmac('sha256',secret).update(x).digest('base64url');
 const cookie=req=>(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('codeful_session='))?.slice(16)||'';
 const attempts=new Map();
