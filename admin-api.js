@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {installCommerceAdmin} from './commerce-admin.js';
 export async function installAdmin(app,pool){
 if(!pool){app.get('/api/admin/*',(_q,r)=>r.status(503).json({error:'Database not configured'}));return}
 await pool.query("CREATE TABLE IF NOT EXISTS studio_products(id BIGSERIAL PRIMARY KEY,slug VARCHAR(100) UNIQUE NOT NULL,name VARCHAR(120) NOT NULL,type VARCHAR(120) NOT NULL,description TEXT NOT NULL,tags TEXT[] DEFAULT '{}',status VARCHAR(60) DEFAULT 'In development')");
@@ -14,6 +15,7 @@ function requireAdmin(req,res,next){if(!secret||!email||!hash)return res.status(
 app.get('/admin',(_q,r)=>r.sendFile('admin.html',{root:'public'}));
 app.post('/api/admin/login',(req,res)=>{if(!secret||!email||!hash)return res.status(503).json({error:'Set ADMIN_EMAIL, ADMIN_PASSWORD_HASH and ADMIN_SESSION_SECRET in Render Environment'});const key=req.ip||'unknown',v=attempts.get(key)||{count:0,until:0};if(v.count>=6&&v.until>Date.now())return res.status(429).json({error:'Too many attempts'});let valid=false;try{const [salt,expected]=hash.split(':');const got=crypto.scryptSync(String(req.body?.password||''),Buffer.from(salt,'hex'),64),want=Buffer.from(expected,'hex');valid=got.length===want.length&&crypto.timingSafeEqual(got,want)&&String(req.body?.email||'').toLowerCase()===email.toLowerCase()}catch{}if(!valid){attempts.set(key,{count:v.count+1,until:Date.now()+900000});return res.status(401).json({error:'Invalid credentials'})}attempts.delete(key);const p=Buffer.from(JSON.stringify({email,exp:Date.now()+28800000})).toString('base64url');res.cookie('codeful_session',p+'.'+sign(p),{httpOnly:true,sameSite:'strict',secure:process.env.NODE_ENV==='production',maxAge:28800000,path:'/'});res.json({ok:true})});
 app.use('/api/admin',requireAdmin);
+await installCommerceAdmin(app,pool);
 app.get('/api/admin/session',(req,res)=>res.json({ok:true,csrf:sign('csrf:'+cookie(req))}));
 app.post('/api/admin/logout',(req,res)=>{res.clearCookie('codeful_session',{path:'/'});res.json({ok:true})});
 app.get('/api/admin/dashboard',async(req,res)=>{try{const [p,m,e]=await Promise.all([pool.query('SELECT * FROM studio_products ORDER BY id DESC'),pool.query('SELECT * FROM studio_modules ORDER BY id DESC'),pool.query('SELECT * FROM enquiries ORDER BY id DESC LIMIT 200')]);res.json({products:p.rows,modules:m.rows,enquiries:e.rows,csrf:sign('csrf:'+cookie(req))})}catch{res.status(503).json({error:'Database error'})}});
