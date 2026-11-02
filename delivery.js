@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import {notificationSafe} from './notifications.js';
 import {S3Client,PutObjectCommand,GetObjectCommand,HeadObjectCommand,DeleteObjectCommand} from '@aws-sdk/client-s3';
 import {getSignedUrl} from '@aws-sdk/s3-request-presigner';
 
@@ -56,7 +57,7 @@ const r=await conn.query('INSERT INTO studio_release_files(product_slug,version,
 await conn.query('INSERT INTO studio_download_grants(entitlement_id,release_id) SELECT e.id,$1 FROM studio_entitlements e JOIN studio_payments pay ON pay.id=e.payment_id WHERE e.product_slug=$2 AND e.revoked_at IS NULL AND pay.status=\'paid\' ON CONFLICT DO NOTHING',[r.rows[0].id,p.product_slug]);
 await conn.query('DELETE FROM studio_upload_intents WHERE object_key=$1',[key]);
 await conn.query('COMMIT');
-res.status(201).json({id:r.rows[0].id,product_slug:p.product_slug,version:p.version});
+const owners=await pool.query('SELECT DISTINCT account_id FROM studio_entitlements WHERE product_slug=$1 AND revoked_at IS NULL',[p.product_slug]);for(const owner of owners.rows)notificationSafe(pool,owner.account_id,'Software update: '+p.product_slug+' '+p.version,'A new version is available in your Codeful Studios account: '+(process.env.PUBLIC_BASE_URL||'https://codefuldesign.onrender.com')+'/account');res.status(201).json({id:r.rows[0].id,product_slug:p.product_slug,version:p.version});
 }catch(e){await conn.query('ROLLBACK');throw e}finally{conn.release()}
 }catch(e){console.error('Release confirmation failed',e.message);return failure(res,'Release verification failed or version already registered')}
 });
