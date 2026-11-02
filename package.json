@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check server.js && node --check store.js && node --check delivery.js && node --check admin-api.js && node --check commerce-admin.js && node --check public/admin.js && node --check public/commerce-admin.js && node --check public/admin-advanced.js && node --check public/account.js && node --check public/shop.js"
   },
   "dependencies": {
     "express": "^4.21.2",
