@@ -1,5 +1,5 @@
 // Supplementary commerce management interface. Inert until authenticated.
-const commerceSections=['customers','orders','licences','downloads','settings'];
+const commerceSections=['customers','orders','licences','downloads','settings','branding'];
 const schemas={
 customers:{fields:[['name','Name','text'],['email','Email','email']],columns:['id','name','email','created_at']},
 orders:{fields:[['customer_id','Customer ID','number'],['reference','Order reference','text'],['description','Description','text'],['total_pence','Total (pence)','number'],['currency','Currency','text'],['status','Status (draft, pending, cancelled)','text']],columns:['reference','description','total_pence','currency','status']},
